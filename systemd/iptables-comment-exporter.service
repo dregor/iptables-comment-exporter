@@ -1,0 +1,27 @@
+[Unit]
+Description=iptables-comment-exporter (/metrics по помеченным правилам iptables)
+After=network.target
+
+[Service]
+Type=simple
+User=prometheus
+Group=prometheus
+ExecStart=/usr/local/bin/iptables-comment-exporter --bind=127.0.0.1:9631
+Restart=on-failure
+RestartSec=60
+
+# нужны только чтение netfilter-таблиц, без полного root
+CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_RAW
+AmbientCapabilities=CAP_NET_ADMIN CAP_NET_RAW
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+
+# лимиты на случай зависшего/аномального *tables-save
+MemoryMax=64M
+CPUQuota=20%
+TasksMax=16
+
+[Install]
+WantedBy=multi-user.target
