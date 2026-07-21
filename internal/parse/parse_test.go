@@ -21,7 +21,7 @@ COMMIT
 `
 
 func TestParse(t *testing.T) {
-	rules := Parse(strings.NewReader(sample), "ipv4", "iptables-exporter ")
+	rules := Parse(strings.NewReader(sample), "ipv4", "iptables-exporter")
 	if len(rules) != 2 {
 		t.Fatalf("ожидалось 2 правила, получено %d: %+v", len(rules), rules)
 	}
@@ -40,10 +40,69 @@ func TestParse(t *testing.T) {
 }
 
 func TestParseIgnoresUnlabeled(t *testing.T) {
-	rules := Parse(strings.NewReader(sample), "ipv4", "iptables-exporter ")
+	rules := Parse(strings.NewReader(sample), "ipv4", "iptables-exporter")
 	for _, r := range rules {
 		if r.Label == "unrelated comment" {
 			t.Errorf("правило без нашего префикса не должно попадать в результат: %+v", r)
 		}
+	}
+}
+
+// Разные варианты того, как может быть задан --prefix и как отделена метка
+// в реальном --comment: без пробела в значении prefix (текущий дефолт),
+// с пробелом в значении prefix (обратная совместимость со старыми юнитами),
+// с табом, без какого-либо разделителя вовсе.
+func TestParsePrefixVariants(t *testing.T) {
+	cases := []struct {
+		name    string
+		comment string
+		prefix  string
+		want    string
+	}{
+		{"no trailing space in prefix, space in comment", `-A INPUT -j DROP -m comment --comment "iptables-exporter foo"`, "iptables-exporter", "foo"},
+		{"trailing space in prefix (legacy), space in comment", `-A INPUT -j DROP -m comment --comment "iptables-exporter foo"`, "iptables-exporter ", "foo"},
+		{"tab as separator", "-A INPUT -j DROP -m comment --comment \"iptables-exporter\tfoo\"", "iptables-exporter", "foo"},
+		{"no separator at all", `-A INPUT -j DROP -m comment --comment "iptables-exporterfoo"`, "iptables-exporter", "foo"},
+		{"multiple spaces collapse to one match, rest kept as-is", `-A INPUT -j DROP -m comment --comment "iptables-exporter   foo bar"`, "iptables-exporter", "foo bar"},
+		{"empty label after prefix", `-A INPUT -j DROP -m comment --comment "iptables-exporter"`, "iptables-exporter", ""},
+		{"custom prefix with regex-special characters", `-A INPUT -j DROP -m comment --comment "my.tool[v2] foo"`, "my.tool[v2]", "foo"},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			input := "*filter\n[1:2] " + c.comment + "\nCOMMIT\n"
+			rules := Parse(strings.NewReader(input), "ipv4", c.prefix)
+			if len(rules) != 1 {
+				t.Fatalf("ожидалось 1 правило, получено %d: %+v", len(rules), rules)
+			}
+			if rules[0].Label != c.want {
+				t.Errorf("label = %q, ожидалось %q", rules[0].Label, c.want)
+			}
+		})
+	}
+}
+
+func TestParsePrefixMismatchIgnored(t *testing.T) {
+	input := `*filter
+[1:2] -A INPUT -j DROP -m comment --comment "otherprefix foo"
+COMMIT
+`
+	rules := Parse(strings.NewReader(input), "ipv4", "iptables-exporter")
+	if len(rules) != 0 {
+		t.Fatalf("правило с чужим префиксом не должно совпасть, получено: %+v", rules)
+	}
+}
+
+// Метка не должна случайно совпадать, если prefix — только часть другого
+// слова (например prefix "exporter" не должен матчить "exporterfoo" из
+// комментария "iptables-exporterfoo", если сам префикс "iptables-exporter").
+func TestParsePrefixIsAnchoredAtStart(t *testing.T) {
+	input := `*filter
+[1:2] -A INPUT -j DROP -m comment --comment "not-iptables-exporter foo"
+COMMIT
+`
+	rules := Parse(strings.NewReader(input), "ipv4", "iptables-exporter")
+	if len(rules) != 0 {
+		t.Fatalf("префикс должен матчиться только с начала строки комментария, получено: %+v", rules)
 	}
 }

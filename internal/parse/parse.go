@@ -20,10 +20,13 @@ var (
 )
 
 // Parse читает построчно ввод *tables-save и возвращает правила, чей
-// --comment начинается с prefix; сама метка — остаток строки после prefix.
+// --comment начинается с prefix. Метка — то, что идёт после prefix и
+// необязательных пробелов/табов-разделителей.
 func Parse(r io.Reader, family, prefix string) []Rule {
 	var rules []Rule
 	var table string
+
+	labelRe := regexp.MustCompile(`^` + regexp.QuoteMeta(prefix) + `[ \t]*(.*)$`)
 
 	scanner := bufio.NewScanner(r)
 	scanner.Buffer(make([]byte, 0, 64*1024), maxLine)
@@ -42,7 +45,12 @@ func Parse(r io.Reader, family, prefix string) []Rule {
 		}
 
 		cm := commentRe.FindStringSubmatch(line)
-		if cm == nil || !strings.HasPrefix(cm[1], prefix) {
+		if cm == nil {
+			continue
+		}
+
+		lm := labelRe.FindStringSubmatch(cm[1])
+		if lm == nil {
 			continue
 		}
 
@@ -53,7 +61,7 @@ func Parse(r io.Reader, family, prefix string) []Rule {
 			Family:  family,
 			Table:   table,
 			Chain:   m[3],
-			Label:   strings.TrimPrefix(cm[1], prefix),
+			Label:   lm[1],
 			Packets: packets,
 			Bytes:   bytesCount,
 		})

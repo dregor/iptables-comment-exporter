@@ -19,7 +19,7 @@ import (
 
 func main() {
 	bind := flag.String("bind", "127.0.0.1:9631", "адрес:порт для /metrics")
-	prefix := flag.String("prefix", "iptables-exporter ", "обязательный префикс --comment; правила без него игнорируются")
+	prefix := flag.String("prefix", "iptables-exporter", "обязательный префикс --comment; правила без него игнорируются")
 	timeout := flag.Duration("timeout", 5*time.Second, "таймаут одного вызова *tables-save за скрейп")
 	noIPv6 := flag.Bool("no-ipv6", false, "не собирать ip6tables-save")
 	memLimitMB := flag.Int64("mem-limit-mb", 128, "мягкий лимит памяти рантайма Go, МиБ (0 = не ограничивать)")
