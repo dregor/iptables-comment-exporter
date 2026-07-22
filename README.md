@@ -89,9 +89,16 @@ systemd/*.service               — пример юнита для деплоя 
 - `runtime.GOMAXPROCS(1)` и `debug.SetMemoryLimit` — программные лимиты CPU/RAM
   на случай аномалий в самом Go-рантайме.
 - Пример systemd-юнита (`systemd/iptables-comment-exporter.service`) добавляет
-  лимиты на уровне ОС: `MemoryMax`, `CPUQuota`, `TasksMax`, работу без root
-  (`User=prometheus` + `CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_RAW`),
-  `NoNewPrivileges`, `ProtectSystem=strict`.
+  лимиты на уровне ОС: `MemoryMax`, `CPUQuota`, `TasksMax`, `NoNewPrivileges`,
+  `ProtectSystem=strict`.
+- Запуск без root (`User=prometheus` + `CAP_NET_ADMIN`/`CAP_NET_RAW` через
+  `AmbientCapabilities`) технически возможен и работает на части хостов, но
+  ненадёжно: `iptables-save`/`ip6tables-save` (nftables backend) иногда
+  отказывают в "fetch rule set generation id: Permission denied (you must be
+  root)" даже с этими capability через Ambient — воспроизведено на разных
+  комбинациях ОС/ядра/nftables без чёткого правила, когда именно. Надёжно
+  работает только полный root без ограничения capability — так и в примере
+  юнита.
 - Все внешние команды запускаются через `exec.CommandContext` с фиксированными
   аргументами (без shell), инъекция через ввод невозможна.
 
